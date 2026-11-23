@@ -1,0 +1,120 @@
+name: Build Kernel
+
+on:
+  workflow_dispatch:
+    inputs:
+      defconfig:
+        description: 'Kernel defconfig target'
+        required: true
+        default: 'vendor/xiaomi/miatoll_defconfig'
+  push:
+    branches:
+      - 13.0
+    paths-ignore:
+      - 'README*'
+      - '.gitignore'
+
+jobs:
+  build:
+    name: Build Kernel with Clang 16
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Expand Swap Space
+        run: |
+          sudo swapoff -a || true
+          sudo fallocate -l 8G /swapfile
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile
+          sudo swapon /swapfile
+          free -h
+
+      - name: Install Build Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bc bison ca-certificates cpio curl flex git libelf-dev libssl-dev make \
+            python3 tar wget xz-utils zip
+
+      - name: Setup ZyCromerZ Clang 16
+        run: |
+          mkdir -p clang
+          CLANG_URL=$(curl -fsSL https://raw.githubusercontent.com/ZyCromerZ/Clang/main/Clang-16-link.txt)
+          curl -fSL "$CLANG_URL" -o clang.tar.gz
+          tar -xf clang.tar.gz -C clang/
+          rm -f clang.tar.gz
+          echo "$(pwd)/clang/bin" >> $GITHUB_PATH
+
+      - name: Verify Toolchain
+        run: |
+          clang --version
+          ld.lld --version
+
+      - name: Build Kernel Image
+        run: |
+          DEFCONFIG="${{ github.event.inputs.defconfig || 'vendor/xiaomi/miatoll_defconfig' }}"
+          export ARCH=arm64
+          export SUBARCH=arm64
+          export KBUILD_BUILD_USER="notoladik"
+          export KBUILD_BUILD_HOST="github-actions"
+
+          MAKE_ARGS=(
+            ARCH=arm64
+            O=out
+            CC=clang
+            CLANG_TRIPLE=aarch64-linux-gnu-
+            CROSS_COMPILE=aarch64-linux-gnu-
+            CROSS_COMPILE_ARM32=arm-linux-gnueabi-
+            LD=ld.lld
+            AR=llvm-ar
+            NM=llvm-nm
+            OBJCOPY=llvm-objcopy
+            OBJDUMP=llvm-objdump
+            STRIP=llvm-strip
+          )
+
+          mkdir -p out
+          make -j$(nproc --all) "${MAKE_ARGS[@]}" "$DEFCONFIG"
+          make -j$(nproc --all) "${MAKE_ARGS[@]}" Image.gz-dtb dtbo.img || \
+          make -j$(nproc --all) "${MAKE_ARGS[@]}" Image.gz dtbs dtbo.img
+
+      - name: Package with AnyKernel3
+        run: |
+          git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git anykernel
+          cd anykernel
+          sed -i 's/do.devicecheck=1/do.devicecheck=0/g' anykernel.sh
+          sed -i 's/block=auto/block=auto/g' anykernel.sh
+          sed -i 's/is_slot_device=1/is_slot_device=0/g' anykernel.sh
+          sed -i 's/is_slot_device=auto/is_slot_device=0/g' anykernel.sh
+
+          if [ -f ../out/arch/arm64/boot/Image.gz-dtb ]; then
+            cp ../out/arch/arm64/boot/Image.gz-dtb .
+          elif [ -f ../out/arch/arm64/boot/Image.gz ]; then
+            cp ../out/arch/arm64/boot/Image.gz .
+          fi
+
+          if [ -f ../out/arch/arm64/boot/dtbo.img ]; then
+            cp ../out/arch/arm64/boot/dtbo.img .
+          fi
+
+          if [ -f ../out/arch/arm64/boot/dtb.img ]; then
+            cp ../out/arch/arm64/boot/dtb.img dtb
+          elif [ -d ../out/arch/arm64/boot/dts/qcom ] && ls ../out/arch/arm64/boot/dts/qcom/*.dtb >/dev/null 2>&1; then
+            cat ../out/arch/arm64/boot/dts/qcom/*.dtb > dtb
+          elif [ -d ../out/arch/arm64/boot/dts/vendor/qcom ] && ls ../out/arch/arm64/boot/dts/vendor/qcom/*.dtb >/dev/null 2>&1; then
+            cat ../out/arch/arm64/boot/dts/vendor/qcom/*.dtb > dtb
+          fi
+
+          zip -r9 ../Miatoll-UV-Kernel.zip * -x .git README.md *placeholder
+          cd ..
+
+      - name: Upload Kernel Zip Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Miatoll-UV-Kernel
+          path: Miatoll-UV-Kernel.zip
