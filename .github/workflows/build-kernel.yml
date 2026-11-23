@@ -38,8 +38,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            bc bison ca-certificates cpio curl flex git libelf-dev libssl-dev make \
-            python3 tar wget xz-utils zip
+            bc bison binutils-aarch64-linux-gnu binutils-arm-linux-gnueabi ca-certificates \
+            cpio curl flex gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi git libelf-dev \
+            libssl-dev make python3 tar wget xz-utils zip
 
       - name: Setup ZyCromerZ Clang 16
         run: |
@@ -54,6 +55,7 @@ jobs:
         run: |
           clang --version
           ld.lld --version
+          clang --target=aarch64-linux-gnu -fstack-protector-strong -c -x c /dev/null -o /dev/null
 
       - name: Build Kernel Image
         run: |
@@ -67,6 +69,7 @@ jobs:
             ARCH=arm64
             O=out
             CC=clang
+            LLVM_IAS=1
             CLANG_TRIPLE=aarch64-linux-gnu-
             CROSS_COMPILE=aarch64-linux-gnu-
             CROSS_COMPILE_ARM32=arm-linux-gnueabi-
