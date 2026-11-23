@@ -90,8 +90,7 @@ jobs:
 
           mkdir -p out
           make -j$(nproc --all) "${MAKE_ARGS[@]}" "$DEFCONFIG"
-          make -j$(nproc --all) "${MAKE_ARGS[@]}" Image.gz-dtb dtbo.img || \
-          make -j$(nproc --all) "${MAKE_ARGS[@]}" Image.gz dtbs dtbo.img
+          make -j$(nproc --all) "${MAKE_ARGS[@]}" Image.gz dtbs
 
       - name: Package with AnyKernel3
         run: |
@@ -118,6 +117,8 @@ jobs:
             cat ../out/arch/arm64/boot/dts/qcom/*.dtb > dtb
           elif [ -d ../out/arch/arm64/boot/dts/vendor/qcom ] && ls ../out/arch/arm64/boot/dts/vendor/qcom/*.dtb >/dev/null 2>&1; then
             cat ../out/arch/arm64/boot/dts/vendor/qcom/*.dtb > dtb
+          elif [ -d ../out/arch/arm64/boot/dts ] && [ -n "$(find ../out/arch/arm64/boot/dts -name '*.dtb')" ]; then
+            find ../out/arch/arm64/boot/dts -name "*.dtb" -exec cat {} + > dtb
           fi
 
           zip -r9 ../Miatoll-UV-Kernel.zip * -x .git README.md *placeholder
