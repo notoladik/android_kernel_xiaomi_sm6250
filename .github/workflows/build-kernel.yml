@@ -16,7 +16,7 @@ on:
 
 jobs:
   build:
-    name: Build Kernel with Clang 16
+    name: Build Kernel with Clang 14
     runs-on: ubuntu-22.04
 
     steps:
@@ -42,10 +42,10 @@ jobs:
             cpio curl flex gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi git libelf-dev \
             libssl-dev make python3 tar wget xz-utils zip
 
-      - name: Setup ZyCromerZ Clang 16
+      - name: Setup ZyCromerZ Clang 14
         run: |
           mkdir -p clang
-          CLANG_URL=$(curl -fsSL https://raw.githubusercontent.com/ZyCromerZ/Clang/main/Clang-16-link.txt)
+          CLANG_URL=$(curl -fsSL https://raw.githubusercontent.com/ZyCromerZ/Clang/main/Clang-14-link.txt)
           curl -fSL "$CLANG_URL" -o clang.tar.gz
           tar -xf clang.tar.gz -C clang/
           rm -f clang.tar.gz
@@ -56,6 +56,13 @@ jobs:
           clang --version
           ld.lld --version
           clang --target=aarch64-linux-gnu -fstack-protector-strong -c -x c /dev/null -o /dev/null
+          echo "=== Diagnostic compiler test ==="
+          clang -Werror --target=aarch64-linux-gnu -Qunused-arguments \
+            -mgeneral-regs-only -fno-asynchronous-unwind-tables -fno-pic \
+            -O2 -fstack-protector-strong \
+            --prefix=/usr/bin/aarch64-linux-gnu- --gcc-toolchain=/usr \
+            -fuse-ld=lld -flto=thin \
+            -c -x c /dev/null -o /dev/null || true
 
       - name: Build Kernel Image
         run: |
