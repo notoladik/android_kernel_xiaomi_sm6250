@@ -97,9 +97,12 @@ jobs:
           git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git anykernel
           cd anykernel
           sed -i 's/do.devicecheck=1/do.devicecheck=0/g' anykernel.sh
-          sed -i 's/block=auto/block=auto/g' anykernel.sh
+          sed -i 's|^block=.*|block=auto;|g' anykernel.sh
           sed -i 's/is_slot_device=1/is_slot_device=0/g' anykernel.sh
           sed -i 's/is_slot_device=auto/is_slot_device=0/g' anykernel.sh
+
+          echo "=== AnyKernel3 Configuration ==="
+          grep -E "^(do\.devicecheck|block|is_slot_device)" anykernel.sh
 
           if [ -f ../out/arch/arm64/boot/Image.gz-dtb ]; then
             cp ../out/arch/arm64/boot/Image.gz-dtb .
@@ -119,6 +122,12 @@ jobs:
             cat ../out/arch/arm64/boot/dts/vendor/qcom/*.dtb > dtb
           elif [ -d ../out/arch/arm64/boot/dts ] && [ -n "$(find ../out/arch/arm64/boot/dts -name '*.dtb')" ]; then
             find ../out/arch/arm64/boot/dts -name "*.dtb" -exec cat {} + > dtb
+          fi
+
+          if [ -s dtb ]; then
+            echo "=== DTB Image created: $(wc -c < dtb) bytes ==="
+          else
+            echo "=== WARNING: dtb is empty or missing! ==="
           fi
 
           zip -r9 ../Miatoll-UV-Kernel.zip * -x .git README.md *placeholder
